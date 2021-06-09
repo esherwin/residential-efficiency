@@ -1,0 +1,402 @@
+---
+title: "Appliance survey analysis"
+author: "Evan Sherwin"
+date: "October 30, 2017"
+output: html_document
+---
+
+```{r}
+# Load libraries, data with renamed columns
+require(ggplot2)
+require(gdata) # To reorder factors
+require(plyr) # To map factor values
+require(grDevices) # To save transparent graphics
+require(scales) # To have commas in y-axis labels
+require(gridExtra) # To alter axis tics
+require(here)
+require(raster)
+setwd(here::here()) #Navigate to the correct working directory, e.g. setwd("~/Documents/Python/Appliance survey")
+source("Appliance survey load and rename 20210607.R")
+```
+
+```{r}
+# Total respondents
+total.respondents <- dim(appliance_survey_results)[1]
+total.respondents
+```
+
+```{r}  
+# Total rebate households
+total.rebates <- table(appliance_survey_results$any_rebate)
+total_rebates_pct <- 100*total.rebates/sample_size
+
+# Total households that purchased any appliance
+total.purchases <- table(appliance_survey_results$bought_appliance != "I did not purchase any of these")
+total_purchases_pct <- 100*total.purchases/sample_size
+```
+
+```{r}
+# Summary statistics and demographics
+care_dist <- table(appliance_survey_results[, "CARE"])
+esap_dist <- table(appliance_survey_results[, "ESAP"])
+age_dist <- table(appliance_survey_results[, "Age"])
+gender_dist <- table(appliance_survey_results[, "Gender"])
+race_dist <- table(appliance_survey_results[, "Race"])
+income_dist <- table(appliance_survey_results[, "Income"])
+edu_dist <- table(appliance_survey_results[, "Education"])
+hhld_size_dist <- table(appliance_survey_results[, "HHld_size"])
+pays_dist <- table(appliance_survey_results[, "Pays_bill"])
+utility_dist <- table(appliance_survey_results$UtilityAbbr)
+
+# As percent of sample
+care_dist_pct <- care_dist/sample_size
+esap_dist_pct <- esap_dist/sample_size
+age_dist_pct <- age_dist/sample_size
+pct_sample_21_40 <- sum(age_dist_pct[c(2,3)])
+gender_dist_pct <- gender_dist/sample_size
+race_dist_pct <- race_dist/sample_size
+income_dist_pct <- income_dist/sample_size
+income_pct_leq_80k <- sum(income_dist_pct[c(1,2,4)])
+edu_dist_pct <- edu_dist/sample_size
+hhld_size_dist_pct <- hhld_size_dist/sample_size
+hhld_size_1_or_2 <- sum(hhld_size_dist_pct[c(2, 3)])
+hhld_size_3_plus <- sum(hhld_size_dist_pct[c(4, 5, 6)])
+pays_dist_pct <- pays_dist/sample_size
+utility_dist_pct <- utility_dist/sample_size
+```
+
+```{r}
+# Rebate applications by who pays electric bill
+pays_rebate_dist <- table(appliance_survey_results[, "Pays_bill"], appliance_survey_results$any_rebate)
+
+# Fraction of respondents who applied for a rebate by who pays electric bill
+pays_rebate_dist_pct <- pays_rebate_dist/rowSums(pays_rebate_dist)
+pays_rebate_dist_pct
+```
+```{r}
+# Fraction enrolled in CARE in PG&E (survey respondents)
+care_dist_pge <- table(appliance_survey_results[appliance_survey_results$Utility == "Pacific Gas and Electric Company (PG&E)", "CARE"])
+care_dist_pge_pct <- care_dist_pge/sum(care_dist_pge)
+care_dist_pge_pct
+```
+
+
+```{r}
+# Table 17
+# Demographics and other summary statistics
+demographics <- data.frame(matrix(nrow=1, ncol=0))
+demographics$care <-  care_dist_pct[2]
+demographics$esap <- esap_dist_pct[2]
+demographics$pge <- utility_dist_pct["PG&E"]
+demographics$age_30_or_less <- sum(age_dist_pct[2])
+demographics$white <- race_dist_pct["White"]
+demographics$income_below_80k <- sum(income_dist_pct[c(2, 4)])
+demographics$bachelor_plus <- edu_dist_pct[2]
+demographics$hhld_size_2_or_less <- sum(hhld_size_dist_pct[c(2,3)])
+demographics$pays_own_bill <- pays_dist_pct["You"]
+demographics$total_respondents <- sample_size
+demographics
+```
+
+```{r}
+# Function to get median value of a categorical variable
+medianCategorical <- function (col) {
+  levels(appliance_survey_results[, col])[median(as.numeric(appliance_survey_results[, col]))] 
+  }
+```
+
+```{r}
+# Demographics
+# Median age bracket
+#levels(appliance_survey_results[, "Age"])[median(as.numeric(appliance_survey_results[, "Age"]))] 
+medianCategorical("Age")
+
+# Gender breakdown
+gender_dist
+
+# Median income
+#levels(appliance_survey_results[, "Income"])[median(as.numeric(appliance_survey_results[, "Income"]))] 
+medianCategorical("Income")
+
+# Median education
+medianCategorical("Education")
+
+# Education breakdown
+edu_dist
+
+# Median household size
+medianCategorical("HHld_size")
+
+# Pays bill breakdown
+pays_dist
+
+# Moved breakdown
+table(appliance_survey_results[, c("Moved?")])
+
+# Median number of years ago moved
+summary(appliance_survey_results[,"Moved_year"])
+#sd(appliance_survey_results[,"Moved_year"], na.rm=T)
+```
+
+```{r}
+# At least one rebate
+sum(appliance_survey_results$any_rebate)
+# Multiple rebates
+sum(grepl(",", appliance_survey_results$rebate))
+# Multiple rebates by year
+```
+
+```{r}
+# Table 18
+# Reported appliance ownership
+appliance_survey_results$have_fridge <- grepl("Refrigerator", appliance_survey_results$have_appliance)
+appliance_survey_results$have_AC <- grepl("Window Air Conditioner", appliance_survey_results$have_appliance)
+appliance_survey_results$have_Dryer <- grepl("Clothes Dryer", appliance_survey_results$have_appliance)
+appliance_survey_results$have_Washer <- grepl("Clothes Washer", appliance_survey_results$have_appliance)
+appliance_survey_results$have_Water_heater <- grepl("Water Heater", appliance_survey_results$have_appliance)
+appliance_survey_results$have_Pool_pump <- grepl("Pool pump/motor", appliance_survey_results$have_appliance)
+have_appliance_list <- data.frame("Refrigerator" = table(appliance_survey_results$have_fridge)[2],
+                      "Window Air Conditioner" = table(appliance_survey_results$have_AC)[2],
+                      "Clothes Dryer" = table(appliance_survey_results$have_Dryer)[2],
+                      "Clothes Washer" = table(appliance_survey_results$have_Washer)[2],
+                      "Water Heater" = table(appliance_survey_results$have_Water_heater)[2],
+                      "Pool Pump" = table(appliance_survey_results$have_Pool_pump)[2])
+have_appliance_list_pct <- have_appliance_list/sample_size
+have_appliance_list_pct
+```
+```{r}
+# Table 18, continued
+# Reported appliance purchasing
+appliance_survey_results$bought_fridge <- grepl("Refrigerator", appliance_survey_results$bought_appliance)
+appliance_survey_results$bought_AC <- grepl("Window Air Conditioner", appliance_survey_results$bought_appliance)
+appliance_survey_results$bought_Dryer <- grepl("Clothes Dryer", appliance_survey_results$bought_appliance)
+appliance_survey_results$bought_Washer <- grepl("Clothes Washer", appliance_survey_results$bought_appliance)
+appliance_survey_results$bought_Water_heater <- grepl("Water Heater", appliance_survey_results$bought_appliance)
+appliance_survey_results$bought_Pool_pump <- grepl("Pool pump/motor", appliance_survey_results$bought_appliance)
+bought_appliance_list <- data.frame("Refrigerator" = table(appliance_survey_results$bought_fridge)[2],
+                      "Window Air Conditioner" = table(appliance_survey_results$bought_AC)[2],
+                      "Clothes Dryer" = table(appliance_survey_results$bought_Dryer)[2],
+                      "Clothes Washer" = table(appliance_survey_results$bought_Washer)[2],
+                      "Water Heater" = table(appliance_survey_results$bought_Water_heater)[2],
+                      "Pool Pump" = table(appliance_survey_results$bought_Pool_pump)[2])
+bought_appliance_list_pct <- bought_appliance_list/sample_size
+```
+```{r}
+# Table 18, continued
+# Reported rebates by appliance
+appliance_survey_results$rebate_fridge <- grepl("Refrigerator", appliance_survey_results$rebate)
+appliance_survey_results$rebate_AC <- grepl("Window Air Conditioner", appliance_survey_results$rebate)
+appliance_survey_results$rebate_Dryer <- grepl("Clothes Dryer", appliance_survey_results$rebate)
+appliance_survey_results$rebate_Washer <- grepl("Clothes Washer", appliance_survey_results$rebate)
+appliance_survey_results$rebate_Water_heater <- grepl("Water Heater", appliance_survey_results$rebate)
+appliance_survey_results$rebate_Pool_pump <- grepl("Pool pump/motor", appliance_survey_results$rebate)
+rebate_appliance_list <- data.frame("Refrigerator" = table(appliance_survey_results$rebate_fridge)[2],
+                      "Window Air Conditioner" = table(appliance_survey_results$rebate_AC)[2],
+                      "Clothes Dryer" = table(appliance_survey_results$rebate_Dryer)[2],
+                      "Clothes Washer" = table(appliance_survey_results$rebate_Washer)[2],
+                      "Water Heater" = table(appliance_survey_results$rebate_Water_heater)[2],
+                      "Pool Pump" = table(appliance_survey_results$rebate_Pool_pump)[2])
+rebate_appliance_list_pct <- rebate_appliance_list/sample_size
+rebate_appliance_list_pct
+```
+```{r}
+# Table 18, continued
+# Reported presence of old appliance by appliance
+old_appliance_list <- data.frame("Refrigerator" = table(appliance_survey_results$old_Refrigerator)[3],
+                      "Window Air Conditioner" = table(appliance_survey_results$old_AC)[3],
+                      "Clothes Dryer" = table(appliance_survey_results$old_Dryer)[3],
+                      "Clothes Washer" = table(appliance_survey_results$old_Washer)[3],
+                      "Water Heater" = table(appliance_survey_results$old_Water_Heater)[3],
+                      "Pool Pump" = table(appliance_survey_results$old_Pool_Pump)[3])
+old_appliance_list_pct <- old_appliance_list/sample_size
+old_appliance_list_pct
+```
+```{r}
+# Table 18 full
+table_18 <- data.frame("Have"=unlist(have_appliance_list_pct), "Bought"=unlist(bought_appliance_list_pct), "Rebate"=unlist(rebate_appliance_list_pct), "Had old"=unlist(old_appliance_list_pct))
+round(table_18, 2)
+```
+
+```{r}
+# Table 19
+# What did people do with old appliances?
+did_fridge <- table(appliance_survey_results[, "did_Refrigerator"])
+did_AC <- table(appliance_survey_results[, "did_AC"])
+did_Dryer <- table(appliance_survey_results[, "did_Dryer"])
+did_Washer <- table(appliance_survey_results[, "did_Washer"])
+did_Water_heater <- table(appliance_survey_results[, "did_Water_Heater"])
+did_Pool_pump <- table(appliance_survey_results[, "did_Pool_Pump"])
+did_appliance.list <- list("Refrigerator" = did_fridge,
+                      "Window Air Conditioner" = did_AC,
+                      "Clothes Dryer" = did_Dryer,
+                      "Clothes Washer" = did_Washer,
+                      "Water Heater" = did_Water_heater,
+                      "Pool Pump" = did_Pool_pump)
+```
+```{r}
+# Table 19 continued
+appliance_list <- labels(did_appliance.list)
+old_appliance_options <- c("Kept it", "Recycled it", "Scrapped it", "Sold it")
+old_appliance_fate <- data.frame(matrix(ncol=length(old_appliance_options), nrow=length(appliance_list)))
+colnames(old_appliance_fate) <- old_appliance_options
+rownames(old_appliance_fate) <- appliance_list
+for (ii in appliance_list) {
+  for (jj in old_appliance_options) {
+    #did_appliance.list[[ii]][jj]
+    old_appliance_fate[ii, jj] <- did_appliance.list[[ii]][jj]
+  }
+}
+old_appliance_fate
+rowSums(old_appliance_fate, na.rm=T)
+#did_appliance.list[["Pool Pump"]]["Recycled it"]
+```
+```{r}
+# Percent of rebate households with an old and working refrigerator that reported recycling it
+sum(appliance_survey_results$rebate_fridge & (appliance_survey_results$old_Refrigerator == "Yes") & (appliance_survey_results$did_Refrigerator == "Recycled it"), na.rm = T)/sum(appliance_survey_results$rebate_fridge & (appliance_survey_results$old_Refrigerator == "Yes"), na.rm = T)
+```
+```{r}
+# Percent of rebate households that kept an old model (regardless of whether they had it)
+total_rebate_hhlds_old <- sum(old_appliance_fate, na.rm=T)
+total_rebate_hhlds_old
+kept_old_hhlds <- sum(old_appliance_fate$`Kept it`, na.rm=T)
+kept_old_hhlds
+kept_old_hhlds_pct <- kept_old_hhlds/total_rebate_hhlds_old
+kept_old_hhlds_pct
+```
+```{r}
+# Percent of rebate households that had and kept an old model
+total_rebate_hhlds_old <- sum(old_appliance_fate, na.rm=T)
+total_rebate_hhlds_old
+kept_old_hhlds <- sum(old_appliance_fate$`Kept it`, na.rm=T)
+kept_old_hhlds
+kept_old_hhlds_pct <- kept_old_hhlds/total_rebate_hhlds_old
+kept_old_hhlds_pct
+```
+
+
+```{r}
+# Total rebate households that reported having an old version of the same appliance
+rebate_hhlds_kept_old_pct <- kept_old_hhlds/total.rebates[2]
+rebate_hhlds_kept_old_pct
+```
+```{r}
+# Hypothesis 2
+fraction_rebates_with_old_appliance <- sum(old_appliance_list)/sum(rebate_appliance_list)
+fraction_rebates_with_old_appliance
+```
+
+```{r}
+# Old appliance fate pct
+rebate_hhlds_with_old_version <- sum(old_appliance_list)
+old_appliance_fate_pct <- old_appliance_fate/rebate_hhlds_with_old_version
+colSums(old_appliance_fate_pct, na.rm=TRUE)
+```
+
+```{r}
+# Number asked questions about changes in household size
+not_asked_hhld_size_change <- sum(is.na(appliance_survey_results$HHld_size_change))
+asked_hhld_size_change <- sum(!is.na(appliance_survey_results$HHld_size_change))
+```
+
+```{r}
+# Hypothesis 3
+# How many rebate households have a change in household size?
+
+# Fraction respondends with increased household size
+hhld_size_inc_pct <- sum(table(appliance_survey_results$When_HHld_increase_grouped)[-1]/asked_hhld_size_change)
+hhld_size_dec_pct <- sum(table(appliance_survey_results$When_HHld_decrease_grouped)[-1]/asked_hhld_size_change)
+hhld_size_inc_pct
+hhld_size_dec_pct
+```
+
+```{r}
+# Hypothesis 3, continued
+# Set age to NA for cases where it is currently blank
+appliance_survey_results$age_AC_noblank <- appliance_survey_results$age_AC
+appliance_survey_results$age_Dryer_noblank <- appliance_survey_results$age_Dryer
+appliance_survey_results$age_Washer_noblank <- appliance_survey_results$age_Washer
+appliance_survey_results$age_Water_Heater_noblank <- appliance_survey_results$age_Water_Heater
+appliance_survey_results$age_Pool_Pump_noblank <- appliance_survey_results$age_Pool_Pump
+appliance_survey_results$age_Refrigerator_noblank <- appliance_survey_results$age_Refrigerator
+
+appliance_survey_results[appliance_survey_results$age_AC_noblank == "", "age_AC_noblank"] <- NA
+appliance_survey_results[appliance_survey_results$age_Dryer_noblank == "", "age_Dryer_noblank"] <- NA
+appliance_survey_results[appliance_survey_results$age_Washer_noblank == "", "age_Washer_noblank"] <-NA
+appliance_survey_results[appliance_survey_results$age_Water_Heater_noblank == "", "age_Water_Heater_noblank"] <- NA
+appliance_survey_results[appliance_survey_results$age_Pool_Pump_noblank == "", "age_Pool_Pump_noblank"] <- NA
+appliance_survey_results[appliance_survey_results$age_Refrigerator_noblank == "", "age_Refrigerator_noblank"] <- NA
+
+# Create variable of timing for all rebates (most recent rebate selected)
+most_recent_rebate <- factor(levels(appliance_survey_results$age_AC_noblank)[
+  pmin(as.numeric(appliance_survey_results$age_AC_noblank),
+     as.numeric(appliance_survey_results$age_Dryer_noblank),
+     as.numeric(appliance_survey_results$age_Washer_noblank),
+     as.numeric(appliance_survey_results$age_Water_Heater_noblank),
+     as.numeric(appliance_survey_results$age_Pool_Pump_noblank),
+     as.numeric(appliance_survey_results$age_Refrigerator_noblank), na.rm = TRUE)])
+#most_recent_rebate
+```
+
+```{r}
+# Hypothesis 3 continued
+# A little less than half of all rebate households moved at some point during the past 10 years
+moved_last_10_yrs <- table(appliance_survey_results$HHld_size_change, appliance_survey_results$any_rebate)
+
+# Timing of increases and decreases in household size
+rebate_hhld_size_increase_timing <- table(appliance_survey_results$When_HHld_increase_grouped, most_recent_rebate)
+rebate_hhld_size_decrease_timing <- table(appliance_survey_results$When_HHld_decrease_grouped, most_recent_rebate)
+
+# Number of simultaneous rebates and increases/decreases in household size sums diagonal after removing blanks and "don't remember" cases
+simult_rebate_hhld_increase <- sum(diag(rebate_hhld_size_increase_timing[-1,-4]))# -1,-c(1,5)]))
+simult_rebate_hhld_decrease <- sum(diag(rebate_hhld_size_decrease_timing[-1, -4]))# -1,-c(1,5)]))
+simult_rebate_hhld_increase
+simult_rebate_hhld_decrease
+```
+
+```{r}
+# Magnitude of change in hhld size
+hhldblank <- (appliance_survey_results$HHld_size =="Prefer not to answer") | 
+  (appliance_survey_results$HHld_size =="") |
+  (appliance_survey_results$Prev_HHld_size == "Prefer not to answer") |
+  (appliance_survey_results$Prev_HHld_size == "")
+appliance_survey_results$HHld_size_delta <- as.numeric(appliance_survey_results[, "HHld_size"]) -  as.numeric(appliance_survey_results[, "HHld_size_change"])
+appliance_survey_results[(hhldblank) | (is.na(hhldblank)), "HHld_size_delta"] <- NA
+
+# Table of rebates and most recent change in household size
+# Changes in household size are pretty symmetric for all rebate lengths
+# Possible exception of rebates 4-6 years ago
+table(appliance_survey_results$HHld_size_delta, most_recent_rebate)
+
+second_round_conversion_rate <- 665/564
+```
+```{r}
+# Hypothesis 4
+# Simultaneous home renovations
+# A little over half of those who renovated applied for an appliance rebate
+# 71 had a renovation, 41 of which applied for a rebate
+# Note that only the second round of respondents were asked about the timing of renovations
+renovation_rebate_summary <- table(appliance_survey_results$Renovation, appliance_survey_results$any_rebate)
+renovation_rebate_summary_pct <- renovation_rebate_summary/asked_hhld_size_change
+
+# Pct with renovations in the study period
+sum(renovation_rebate_summary_pct["Yes", ])
+
+# Pct with renovations and rebates
+renovation_rebate_summary_pct["Yes", "TRUE"]
+
+# Table of renovation year and rebate year
+renovation_rebate_comparison <- table(appliance_survey_results$Renovation_when, most_recent_rebate)
+
+# Simultaneous rebates and renovations (sums diagonals after removing blanks and "Don't remember" cases)
+simult_renovation_rebate <- sum(diag(renovation_rebate_comparison[-c(1, 5), -4]))#-c(1, 5)]))
+simult_renovation_rebate
+
+```
+
+```{r}
+# Renovation descriptions
+unique(appliance_survey_results$Renovation_description)
+
+# Renovation rebates
+summary(appliance_survey_results$Renovation_rebate)
+```
