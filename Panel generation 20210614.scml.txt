@@ -1,0 +1,1148 @@
+*/*
+*STATA Code
+*For creating panel out of PG&E WCAI Data for Sherwin et al. 2021
+*v.1
+*/
+
+
+*Increase system memory allocation
+set mem 25000000
+
+*
+*Part 1 - Dataset creation
+*
+*Section A - Daily Electricity Panel Data
+*/
+
+
+*Import electric daily text file
+*replace file location with appropriate local directory
+insheet using "C:\WCAI-PG&E\_electric_interval_daily.txt
+*Save data in Stata fortmat
+*replace file location with appropriate local directory
+save "C:\Users\Russell Meyer\Documents\PGE\131210 DailyPanel.dta"
+
+
+*Import other files to Stata format prior to merge operations
+clear
+insheet using "C:\WCAI-PG&E\_01customer.txt"
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer.dta"
+clear
+insheet using "C:\WCAI-PG&E\_02premise.txt"
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _02premise.dta"
+clear
+insheet using "C:\WCAI-PG&E\_03accounts.txt"
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _03accounts.dta"
+clear
+insheet using "C:\WCAI-PG&E\_05programs.txt"
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _05programs.dta"
+clear
+insheet using "C:\WCAI-PG&E\_06rebates.txt"
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates.dta"
+clear
+insheet using "C:\WCAI-PG&E\_11census.txt"
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _11census.dta"
+
+*Cleaning files prior to merge operations
+*removing duplicate IDs from customer file for gas meters
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer.dta", clear
+drop if svc_type_cd == "G"
+*creating secondary files for cases in which multiple service_agreement_ids are associated with a single service_poijt_id (max=7)
+sort service_point_id
+by service_point_id, sort: gen IDcount=_N
+by service_point_id, sort: gen IDnum=_n
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer.dta", replace
+drop if IDnum != 1
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer1.dta"
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer.dta", clear
+drop if IDnum != 2
+rename service_agreement_id_pseudo service_agreement_id_pseudo2
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer2.dta"
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer.dta", clear
+drop if IDnum != 3
+rename service_agreement_id_pseudo service_agreement_id_pseudo3
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer3.dta"
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer.dta", clear
+drop if IDnum != 4
+rename service_agreement_id_pseudo service_agreement_id_pseudo4
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer4.dta"
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer.dta", clear
+drop if IDnum != 5
+rename service_agreement_id_pseudo service_agreement_id_pseudo5
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer5.dta"
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer.dta", clear
+drop if IDnum != 6
+rename service_agreement_id_pseudo service_agreement_id_pseudo6
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer6.dta"
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer.dta", clear
+drop if IDnum != 7
+rename service_agreement_id_pseudo service_agreement_id_pseudo7
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer7.dta"
+*reshuffling _01customer so that service_point_id are unique record identifiers
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer1.dta", clear
+merge 1:1 service_point_id using "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer2.dta", keepusing
+
+(service_agreement_id_pseudo2)
+drop if _merge==2
+drop _merge
+merge 1:1 service_point_id using "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer3.dta", keepusing
+
+(service_agreement_id_pseudo3)
+drop if _merge==2
+drop _merge
+merge 1:1 service_point_id using "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer4.dta", keepusing
+
+(service_agreement_id_pseudo4)
+drop if _merge==2
+drop _merge
+merge 1:1 service_point_id using "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer5.dta", keepusing
+
+(service_agreement_id_pseudo5)
+drop if _merge==2
+drop _merge
+merge 1:1 service_point_id using "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer6.dta", keepusing
+
+(service_agreement_id_pseudo6)
+drop if _merge==2
+drop _merge
+merge 1:1 service_point_id using "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer7.dta", keepusing
+
+(service_agreement_id_pseudo7)
+drop if _merge==2
+drop _merge
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer.dta", replace
+*can now delete Stata datasets of the form _01customer*.dta.  Keep the _01customer.dta (without number suffix) file.
+*Converting program participation into binary indicators
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _05programs.dta", clear
+sort account_id_pseudo timesenrolled
+by account_id_pseudo, sort: gen IDcount=_N
+by account_id_pseudo, sort: gen IDnum=_n
+gen bpp=0
+gen care=0
+gen climatesmart=0
+gen diraccess=0
+gen smartac=0
+gen smartrate=0
+gen myenergy=0
+replace bpp = 1 if  bpp_startdate != "NULL" |  bpp_enddate != "NULL"
+replace care = 1 if   care_startdate != "NULL" |   care_enddate != "NULL"
+replace climatesmart = 1 if   climatesmart_startdate != "NULL" |  climatesmart_enddate != "NULL"
+replace diraccess = 1 if   diraccess_startdate != "NULL" |  diraccess_enddate != "NULL"
+replace smartac = 1 if smartac_startdate != "NULL" |  smartac_enddate != "NULL"
+replace smartrate = 1 if smartrate_startdate != "NULL" |  smartrate_enddate != "NULL"
+replace myenergy = 1 if  myenergy_lastlogin != "NULL"
+drop if IDnum != 1
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _05programs.dta", replace
+*creating duplicate variable names for _06rebates for consistency with _01customers file.
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates.dta", clear
+gen service_agreement_id_pseudo2 = service_agreement_id_pseudo
+gen service_agreement_id_pseudo3 = service_agreement_id_pseudo
+gen service_agreement_id_pseudo4 = service_agreement_id_pseudo
+gen service_agreement_id_pseudo5 = service_agreement_id_pseudo
+gen service_agreement_id_pseudo6 = service_agreement_id_pseudo
+gen service_agreement_id_pseudo7 = service_agreement_id_pseudo
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates.dta", replace
+*creating multiple instances of rebates file for multiple rebates per location.  capping multiple at 5, and adding a count value 
+
+for the total number observed (max=461)
+sort service_agreement_id_pseudo
+by service_agreement_id_pseudo, sort: gen IDcount=_N
+by service_agreement_id_pseudo, sort: gen IDnum=_n
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates.dta", replace
+drop if IDcount != IDnum
+rename IDcount rebatecount
+save "C:\Users\Russell Meyer\Documents\PGE\131210 rebatecount.dta"
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates.dta", clear
+drop if IDnum != 1
+rename application_recvd_date application_recvd_date1
+rename accept_date accept_date1
+rename  check_issue_date check_issue_date1
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates1.dta"
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates.dta", clear
+drop if IDnum != 2
+rename rebate_category1 rebate_category2
+rename application_recvd_date application_recvd_date2
+rename accept_date accept_date2
+rename check_issue_date check_issue_date2
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates2.dta"
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates.dta", clear
+drop if IDnum != 3
+rename rebate_category1 rebate_category3
+rename application_recvd_date application_recvd_date3
+rename accept_date accept_date3
+rename check_issue_date check_issue_date3
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates3.dta"
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates.dta", clear
+drop if IDnum != 4
+rename rebate_category1 rebate_category4
+rename application_recvd_date application_recvd_date4
+rename accept_date accept_date4
+rename check_issue_date check_issue_date4
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates4.dta"
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates.dta", clear
+drop if IDnum != 5
+rename rebate_category1 rebate_category5
+rename application_recvd_date application_recvd_date5
+rename accept_date accept_date5
+rename check_issue_date check_issue_date5
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates5.dta"
+use "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates1.dta", clear
+merge 1:1 service_agreement_id_pseudo using "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates2.dta", keepusing
+
+(rebate_category2 application_recvd_date2 accept_date2 check_issue_date2)
+drop _merge
+merge 1:1 service_agreement_id_pseudo using "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates3.dta", keepusing
+
+(rebate_category3 application_recvd_date3 accept_date3 check_issue_date3)
+drop _merge
+merge 1:1 service_agreement_id_pseudo using "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates4.dta", keepusing
+
+(rebate_category4 application_recvd_date4 accept_date4 check_issue_date4)
+drop _merge
+merge 1:1 service_agreement_id_pseudo using "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates5.dta", keepusing
+
+(rebate_category5 application_recvd_date5 accept_date5 check_issue_date5)
+drop _merge
+merge 1:1 service_agreement_id_pseudo using "C:\Users\Russell Meyer\Documents\PGE\131210 rebatecount.dta", keepusing(rebatecount)
+save "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates1.dta", replace
+
+
+
+*Merge files
+use "C:\Users\Russell Meyer\Documents\PGE\131210 DailyPanel.dta", clear
+merge m:1 service_point_id using "C:\Users\Russell Meyer\Documents\PGE\131210 _01customer.dta", keepusing
+
+(service_agreement_id_pseudo service_agreement_id_pseudo2 service_agreement_id_pseudo3 service_agreement_id_pseudo4 
+
+service_agreement_id_pseudo5 service_agreement_id_pseudo6 service_agreement_id_pseudo7 account_id_pseudo per_id_pseudo 
+
+premise_id_pseudo)
+*results of merge show 2,496 observations from customer list that do not have corresponding energy readings.  These empty records 
+
+are dropped.
+drop if _merge==2
+drop _merge
+save "C:\Users\Russell Meyer\Documents\PGE\131210 DailyPanel.dta", replace
+merge m:1 premise_id_pseudo using "C:\Users\Russell Meyer\Documents\PGE\131210 _02premise.dta"
+drop if _merge==2
+drop _merge
+save "C:\Users\Russell Meyer\Documents\PGE\131210 DailyPanel.dta", replace
+merge m:1 account_id_pseudo using "C:\Users\Russell Meyer\Documents\PGE\131210 _03accounts.dta", keepusing(geography climate_band 
+
+electric_rate gas_rate tou_rate environment_or_wildlife environmental_issues green_living high_tech_living education cluster)
+drop if _merge==2
+drop _merge
+save "C:\Users\Russell Meyer\Documents\PGE\131210 DailyPanel.dta", replace
+merge m:1 account_id_pseudo using "C:\Users\Russell Meyer\Documents\PGE\131210 _05programs.dta", keepusing(bpp care climatesmart 
+
+diraccess smartac smartrate myenergy)
+drop if _merge==2
+drop _merge
+merge m:1 service_agreement_id_pseudo using "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates1.dta", keepusing
+
+(rebate_category1 application_recvd_date1 accept_date1 check_issue_date1 rebate_category2 application_recvd_date2 accept_date2 
+
+check_issue_date2 rebate_category3 application_recvd_date3 accept_date3 check_issue_date3 rebate_category4 
+
+application_recvd_date4 accept_date4 check_issue_date4 rebate_category5 application_recvd_date5 accept_date5 check_issue_date5 
+
+rebatecount)
+drop if _merge==2
+drop _merge
+merge m:1 service_agreement_id_pseudo2 using "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates1.dta", keepusing
+
+(rebate_category1 application_recvd_date1 accept_date1 check_issue_date1 rebate_category2 application_recvd_date2 accept_date2 
+
+check_issue_date2 rebate_category3 application_recvd_date3 accept_date3 check_issue_date3 rebate_category4 
+
+application_recvd_date4 accept_date4 check_issue_date4 rebate_category5 application_recvd_date5 accept_date5 check_issue_date5 
+
+rebatecount)
+drop if _merge==2
+drop _merge
+merge m:1 service_agreement_id_pseudo3 using "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates1.dta", keepusing
+
+(rebate_category1 application_recvd_date1 accept_date1 check_issue_date1 rebate_category2 application_recvd_date2 accept_date2 
+
+check_issue_date2 rebate_category3 application_recvd_date3 accept_date3 check_issue_date3 rebate_category4 
+
+application_recvd_date4 accept_date4 check_issue_date4 rebate_category5 application_recvd_date5 accept_date5 check_issue_date5 
+
+rebatecount)
+drop if _merge==2
+drop _merge
+merge m:1 service_agreement_id_pseudo4 using "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates1.dta", keepusing
+
+(rebate_category1 application_recvd_date1 accept_date1 check_issue_date1 rebate_category2 application_recvd_date2 accept_date2 
+
+check_issue_date2 rebate_category3 application_recvd_date3 accept_date3 check_issue_date3 rebate_category4 
+
+application_recvd_date4 accept_date4 check_issue_date4 rebate_category5 application_recvd_date5 accept_date5 check_issue_date5 
+
+rebatecount)
+drop if _merge==2
+drop _merge
+merge m:1 service_agreement_id_pseudo5 using "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates1.dta", keepusing
+
+(rebate_category1 application_recvd_date1 accept_date1 check_issue_date1 rebate_category2 application_recvd_date2 accept_date2 
+
+check_issue_date2 rebate_category3 application_recvd_date3 accept_date3 check_issue_date3 rebate_category4 
+
+application_recvd_date4 accept_date4 check_issue_date4 rebate_category5 application_recvd_date5 accept_date5 check_issue_date5 
+
+rebatecount)
+drop if _merge==2
+drop _merge
+merge m:1 service_agreement_id_pseudo6 using "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates1.dta", keepusing
+
+(rebate_category1 application_recvd_date1 accept_date1 check_issue_date1 rebate_category2 application_recvd_date2 accept_date2 
+
+check_issue_date2 rebate_category3 application_recvd_date3 accept_date3 check_issue_date3 rebate_category4 
+
+application_recvd_date4 accept_date4 check_issue_date4 rebate_category5 application_recvd_date5 accept_date5 check_issue_date5 
+
+rebatecount)
+drop if _merge==2
+drop _merge
+merge m:1 service_agreement_id_pseudo7 using "C:\Users\Russell Meyer\Documents\PGE\131210 _06rebates1.dta", keepusing
+
+(rebate_category1 application_recvd_date1 accept_date1 check_issue_date1 rebate_category2 application_recvd_date2 accept_date2 
+
+check_issue_date2 rebate_category3 application_recvd_date3 accept_date3 check_issue_date3 rebate_category4 
+
+application_recvd_date4 accept_date4 check_issue_date4 rebate_category5 application_recvd_date5 accept_date5 check_issue_date5 
+
+rebatecount)
+drop if _merge==2
+drop _merge
+merge m:1 service_point_id using "C:\Users\Russell Meyer\Documents\PGE\131210 _11census.dta", keepusing(census_blockgroup_number 
+
+cbg_latitude cbg_longitude)
+drop if _merge==2
+drop _merge
+rename census_blockgroup_number blockgroup
+compress
+save "C:\Users\Russell Meyer\Documents\PGE\131210 DailyPanel.dta", replace
+
+*Incorporating weather data
+clear
+insheet using "C:\Users\Russell Meyer\Documents\PGE\131029 weather\131029 weather nearest id 3.csv"
+merge m:1 blockgroup using "C:\Users\Russell Meyer\Documents\PGE\131211 weather id table.dta", keepusing(wban wban2 wban3)
+drop if _merge==2
+drop _merge
+save "C:\Users\Russell Meyer\Documents\PGE\131210 DailyPanel.dta", replace
+clear
+insheet using "C:\Users\Russell Meyer\Documents\PGE\131029 weather\NOAA CA weather2.csv"
+gen wban=station
+gen wban2=station
+gen wban3=station
+gen tmax2=tmax
+gen tmax3=tmax
+gen tmin2=tmin
+gen tmin3=tmin
+gen edate = mdy(real(substr(string(date,"%11.0g"),5,2)),real(substr(string(date,"%11.0g"),7,2)),real(substr(string
+
+(date,"%11.0g"),1,4)))
+drop date
+save "C:\Users\Russell Meyer\Documents\PGE\131211 NOAA CA weather.dta"
+use "C:\Users\Russell Meyer\Documents\PGE\131210 DailyPanel.dta", clear
+gen edate = mdy(real(substr(date,6,2)),real(substr(date,9,2)),real(substr(date,1,4)))
+merge m:1 wban edate using "C:\Users\Russell Meyer\Documents\PGE\131211 NOAA CA weather.dta", keepusing(tmax tmin)
+drop if _merge==2
+drop _merge
+merge m:1 wban2 edate using "C:\Users\Russell Meyer\Documents\PGE\131211 NOAA CA weather.dta", keepusing(tmax2 tmin2)
+drop if _merge==2
+drop _merge
+merge m:1 wban3 edate using "C:\Users\Russell Meyer\Documents\PGE\131211 NOAA CA weather.dta", keepusing(tmax3 tmin3)
+drop if _merge==2
+drop _merge
+
+*Some additional cleaning steps
+replace bpp=0 if bpp==.
+replace care=0 if care==.
+replace climatesmart=0 if climatesmart==.
+replace diraccess=0 if diraccess==.
+replace smartac=0 if smartac==.
+replace smartrate=0 if smartrate==.
+
+compress
+save "C:\Users\Russell Meyer\Documents\PGE\131210 DailyPanel.dta", replace
+
+*Generating some additional variables
+replace tmax=. if tmax==-9999
+replace tmin=. if tmin==-9999
+replace tmax2=. if tmax2==-9999
+replace tmin2=. if tmin2==-9999
+replace tmax3=. if tmax3==-9999
+replace tmin3=. if tmin3==-9999
+egen tmaxcalc = rowmean(tmax tmax2 tmax3)
+egen tmincalc = rowmean(tmin tmin2 tmin3)
+gen tmax20 = max(tmaxcalc-200,0)
+gen tmin20 = max(0, 200-tmincalc)
+gen tmax15 = max(tmaxcalc-150,0)
+gen tmin15 = max(0, 150-tmincalc)
+gen tmax15quad = tmax15*tmax15
+gen tmin15quad = tmin15*tmin15
+gen tmax20quad = tmax20*tmax20
+gen tmin20quad = tmin20*tmin20
+*creating new dependent variable
+gen lkws = log(kws_used)
+gen time = edate - 17591
+gen valley = 0
+gen coast = 0
+gen hills = 0
+replace valley = 1 if geography=="Central Valley"
+replace coast = 1 if geography=="Coast"
+replace hills = 1 if geography=="Inland Hills"
+
+
+
+*incorporating census data
+merge m:1 service_point_id using "C:\Users\Russell Meyer\Documents\PGE\HSE2010 v2.dta", keepusing(mdyrhseblt occhseunts gasheat 
+
+elecheat oilkeroht coalwoodht solarheat otherheat noheat ownoccunit hseval_20k hseval_50k hseval100k hseval150k hseval299k 
+
+hseval500k hseval750k hseval1mil hsevlovr1m medhseval mortgequtl mort_eqtl ndmort ndequitln both2mrteq no2ndloans nomortgage)
+drop if _merge==2
+drop _merge
+merge m:1 service_point_id using "C:\Users\Russell Meyer\Documents\PGE\ESS2010 v2.dta", keepusing(totalpop pmale pfem under5 
+
+five_9 ten_14 fiftn_17 eigtn_24 twnt5_34 thrt5_44 fort5_54 fift5_64 six5_74 svnt5_84 eigt5_ovr punder5 pfive_9 pten_14 pfiftn_17 
+
+peigtn_24 ptwnt5_34 pthrt5_44 pfort5_54 pfift5_64 psix5_74 psvnt5_84 peigt5_ovr white black amerindn asian pacific other race2 
+
+pwhite pblack pamerindn pasian ppacific pother prace2 hsehlds famhsehlds nfamhsehld pfamhsehld pnfamhshld medincome hseunits 
+
+occhseunt ownocc rentocc pownocc prentocc totpoppov poor struglng strugblw ok ppoor pstruglng pstrugblw pok total_pop total3pov 
+
+distance)
+drop if _merge==2
+drop _merge
+compress
+save "C:\Users\Russell Meyer\Documents\PGE\131210 DailyPanel.dta", replace
+
+
+*identifying first date of energy observation
+sort  service_point_id edate
+gen smartstart = 0
+by service_point_id (edate), sort: replace smartstart = 1 if _n == 1
+histogram edate if smartstart==1, discrete width(30) percent addlabel
+
+
+*Creating rebate variables and dummies
+gen rebateedate1 = mdy(real(substr(application_recvd_date1,6,2)),real(substr(application_recvd_date1,9,2)),real(substr
+
+(application_recvd_date1,1,4)))
+gen rebateedate2 = mdy(real(substr(application_recvd_date2,6,2)),real(substr(application_recvd_date2,9,2)),real(substr
+
+(application_recvd_date2,1,4)))
+gen rebateedate3 = mdy(real(substr(application_recvd_date3,6,2)),real(substr(application_recvd_date3,9,2)),real(substr
+
+(application_recvd_date3,1,4)))
+gen rebateedate4 = mdy(real(substr(application_recvd_date4,6,2)),real(substr(application_recvd_date4,9,2)),real(substr
+
+(application_recvd_date4,1,4)))
+gen rebateedate5 = mdy(real(substr(application_recvd_date5,6,2)),real(substr(application_recvd_date5,9,2)),real(substr
+
+(application_recvd_date5,1,4)))
+gen rebateHH1 = 0
+gen rebateHH2 = 0
+gen rebateHH3 = 0
+gen rebateHH4 = 0
+gen rebateHH5 = 0
+replace rebateHH1 = 1 if rebateedate1 !=.
+replace rebateHH2 = 1 if rebateedate2 !=.
+replace rebateHH3 = 1 if rebateedate3 !=.
+replace rebateHH4 = 1 if rebateedate4 !=.
+replace rebateHH5 = 1 if rebateedate5 !=.
+gen rebateparticipant1 = 0
+gen rebateparticipant2 = 0
+gen rebateparticipant3 = 0
+gen rebateparticipant4 = 0
+gen rebateparticipant5 = 0
+replace rebateparticipant1 = 1 if edate >= rebateedate1 & rebateedate1 !=.
+replace rebateparticipant2 = 1 if edate >= rebateedate2 & rebateedate2 !=.
+replace rebateparticipant3 = 1 if edate >= rebateedate3 & rebateedate3 !=.
+replace rebateparticipant4 = 1 if edate >= rebateedate4 & rebateedate4 !=.
+replace rebateparticipant5 = 1 if edate >= rebateedate5 & rebateedate5 !=.
+gen ApplianceRecyclingHH1 = 0
+gen AppliancesHH1 = 0
+gen BuildingShellHH1 = 0
+gen CustomMeasureHH1 = 0
+gen HVACHH1 = 0
+gen IntegratedBuildingHH1 = 0
+gen LightingHH1 = 0
+gen PumpsMotorsHH1 = 0
+gen UnknownHH1 = 0
+gen WaterHeatingHH1 = 0
+replace ApplianceRecyclingHH1 = 1 if rebate_category1 == "ApplianceRecycling"
+replace AppliancesHH1 = 1 if rebate_category1 == "Appliances"
+replace BuildingShellHH1 = 1 if rebate_category1 == "Building Shell"
+replace CustomMeasureHH1 = 1 if rebate_category1 == "Customized Measure"
+replace HVACHH1 = 1 if rebate_category1 == "HVAC"
+replace IntegratedBuildingHH1 = 1 if rebate_category1 == "Integrated Buildin"
+replace LightingHH1 = 1 if rebate_category1 == "Lighting"
+replace PumpsMotorsHH1 = 1 if rebate_category1 == "Pumps/Motors"
+replace UnknownHH1 = 1 if rebate_category1 == "Unknown"
+replace WaterHeatingHH1 = 1 if rebate_category1 == "Water Heating"
+gen ApplianceRecyclingParticipant1 = 0
+gen AppliancesParticipant1 = 0
+gen BuildingShellParticipant1 = 0
+gen CustomMeasureParticipant1 = 0
+gen HVACParticipant1 = 0
+gen IntegratedBuildingParticipant1 = 0
+gen LightingParticipant1 = 0
+gen PumpsMotorsParticipant1 = 0
+gen UnknownParticipant1 = 0
+gen WaterHeatingParticipant1 = 0
+replace ApplianceRecyclingParticipant1 = 1 if ApplianceRecyclingHH1 == 1 & edate >= rebateedate1 & rebateedate1 != .
+replace AppliancesParticipant1 = 1 if AppliancesHH1 == 1 & edate >= rebateedate1 & rebateedate1 != .
+replace BuildingShellParticipant1 = 1 if BuildingShellHH1 == 1 & edate >= rebateedate1 & rebateedate1 != .
+replace CustomMeasureParticipant1 = 1 if CustomMeasureHH1 == 1 & edate >= rebateedate1 & rebateedate1 != .
+replace HVACParticipant1 = 1 if HVACHH1 == 1 & edate >= rebateedate1 & rebateedate1 != .
+replace IntegratedBuildingParticipant1 = 1 if IntegratedBuildingHH1 == 1 & edate >= rebateedate1 & rebateedate1 != .
+replace LightingParticipant1 = 1 if LightingHH1 == 1 & edate >= rebateedate1 & rebateedate1 != .
+replace PumpsMotorsParticipant1 = 1 if PumpsMotorsHH1 == 1 & edate >= rebateedate1 & rebateedate1 != .
+replace UnknownParticipant1 = 1 if UnknownHH1 == 1 & edate >= rebateedate1 & rebateedate1 != .
+replace WaterHeatingParticipant1 = 1 if WaterHeatingHH1 == 1 & edate >= rebateedate1 & rebateedate1 != .
+gen ApplianceRecyclingHH2 = 0
+gen AppliancesHH2 = 0
+gen BuildingShellHH2 = 0
+gen CustomMeasureHH2 = 0
+gen HVACHH2 = 0
+gen IntegratedBuildingHH2 = 0
+gen LightingHH2 = 0
+gen PumpsMotorsHH2 = 0
+gen UnknownHH2 = 0
+gen WaterHeatingHH2 = 0
+replace ApplianceRecyclingHH2 = 1 if rebate_category2 == "ApplianceRecycling"
+replace AppliancesHH2 = 1 if rebate_category2 == "Appliances"
+replace BuildingShellHH2 = 1 if rebate_category2 == "Building Shell"
+replace CustomMeasureHH2 = 1 if rebate_category2 == "Customized Measure"
+replace HVACHH2 = 1 if rebate_category2 == "HVAC"
+replace IntegratedBuildingHH2 = 1 if rebate_category2 == "Integrated Buildin"
+replace LightingHH2 = 1 if rebate_category2 == "Lighting"
+replace PumpsMotorsHH2 = 1 if rebate_category2 == "Pumps/Motors"
+replace UnknownHH2 = 1 if rebate_category2 == "Unknown"
+replace WaterHeatingHH2 = 1 if rebate_category2 == "Water Heating"
+gen ApplianceRecyclingParticipant2 = 0
+gen AppliancesParticipant2 = 0
+gen BuildingShellParticipant2 = 0
+gen CustomMeasureParticipant2 = 0
+gen HVACParticipant2 = 0
+gen IntegratedBuildingParticipant2 = 0
+gen LightingParticipant2 = 0
+gen PumpsMotorsParticipant2 = 0
+gen UnknownParticipant2 = 0
+gen WaterHeatingParticipant2 = 0
+replace ApplianceRecyclingParticipant2 = 1 if ApplianceRecyclingHH2 == 1 & edate >= rebateedate2 & rebateedate2 != .
+replace AppliancesParticipant2 = 1 if AppliancesHH2 == 1 & edate >= rebateedate2 & rebateedate2 != .
+replace BuildingShellParticipant2 = 1 if BuildingShellHH2 == 1 & edate >= rebateedate2 & rebateedate2 != .
+replace CustomMeasureParticipant2 = 1 if CustomMeasureHH2 == 1 & edate >= rebateedate2 & rebateedate2 != .
+replace HVACParticipant2 = 1 if HVACHH2 == 1 & edate >= rebateedate2 & rebateedate2 != .
+replace IntegratedBuildingParticipant2 = 1 if IntegratedBuildingHH2 == 1 & edate >= rebateedate2 & rebateedate2 != .
+replace LightingParticipant2 = 1 if LightingHH2 == 1 & edate >= rebateedate2 & rebateedate2 != .
+replace PumpsMotorsParticipant2 = 1 if PumpsMotorsHH2 == 1 & edate >= rebateedate2 & rebateedate2 != .
+replace UnknownParticipant2 = 1 if UnknownHH2 == 1 & edate >= rebateedate2 & rebateedate2 != .
+replace WaterHeatingParticipant2 = 1 if WaterHeatingHH2 == 1 & edate >= rebateedate2 & rebateedate2 != .
+gen ApplianceRecyclingHH3 = 0
+gen AppliancesHH3 = 0
+gen BuildingShellHH3 = 0
+gen CustomMeasureHH3 = 0
+gen HVACHH3 = 0
+gen IntegratedBuildingHH3 = 0
+gen LightingHH3 = 0
+gen PumpsMotorsHH3 = 0
+gen UnknownHH3 = 0
+gen WaterHeatingHH3 = 0
+replace ApplianceRecyclingHH3 = 1 if rebate_category3 == "ApplianceRecycling"
+replace AppliancesHH3 = 1 if rebate_category3 == "Appliances"
+replace BuildingShellHH3 = 1 if rebate_category3 == "Building Shell"
+replace CustomMeasureHH3 = 1 if rebate_category3 == "Customized Measure"
+replace HVACHH3 = 1 if rebate_category3 == "HVAC"
+replace IntegratedBuildingHH3 = 1 if rebate_category3 == "Integrated Buildin"
+replace LightingHH3 = 1 if rebate_category3 == "Lighting"
+replace PumpsMotorsHH3 = 1 if rebate_category3 == "Pumps/Motors"
+replace UnknownHH3 = 1 if rebate_category3 == "Unknown"
+replace WaterHeatingHH3 = 1 if rebate_category3 == "Water Heating"
+gen ApplianceRecyclingParticipant3 = 0
+gen AppliancesParticipant3 = 0
+gen BuildingShellParticipant3 = 0
+gen CustomMeasureParticipant3 = 0
+gen HVACParticipant3 = 0
+gen IntegratedBuildingParticipant3 = 0
+gen LightingParticipant3 = 0
+gen PumpsMotorsParticipant3 = 0
+gen UnknownParticipant3 = 0
+gen WaterHeatingParticipant3 = 0
+replace ApplianceRecyclingParticipant3 = 1 if ApplianceRecyclingHH3 == 1 & edate >= rebateedate3 & rebateedate3 != .
+replace AppliancesParticipant3 = 1 if AppliancesHH3 == 1 & edate >= rebateedate3 & rebateedate3 != .
+replace BuildingShellParticipant3 = 1 if BuildingShellHH3 == 1 & edate >= rebateedate3 & rebateedate3 != .
+replace CustomMeasureParticipant3 = 1 if CustomMeasureHH3 == 1 & edate >= rebateedate3 & rebateedate3 != .
+replace HVACParticipant3 = 1 if HVACHH3 == 1 & edate >= rebateedate3 & rebateedate3 != .
+replace IntegratedBuildingParticipant3 = 1 if IntegratedBuildingHH3 == 1 & edate >= rebateedate3 & rebateedate3 != .
+replace LightingParticipant3 = 1 if LightingHH3 == 1 & edate >= rebateedate3 & rebateedate3 != .
+replace PumpsMotorsParticipant3 = 1 if PumpsMotorsHH3 == 1 & edate >= rebateedate3 & rebateedate3 != .
+replace UnknownParticipant3 = 1 if UnknownHH3 == 1 & edate >= rebateedate3 & rebateedate3 != .
+replace WaterHeatingParticipant3 = 1 if WaterHeatingHH3 == 1 & edate >= rebateedate3 & rebateedate3 != .
+gen ApplianceRecyclingHH4 = 0
+gen AppliancesHH4 = 0
+gen BuildingShellHH4 = 0
+gen CustomMeasureHH4 = 0
+gen HVACHH4 = 0
+gen IntegratedBuildingHH4 = 0
+gen LightingHH4 = 0
+gen PumpsMotorsHH4 = 0
+gen UnknownHH4 = 0
+gen WaterHeatingHH4 = 0
+replace ApplianceRecyclingHH4 = 1 if rebate_category4 == "ApplianceRecycling"
+replace AppliancesHH4 = 1 if rebate_category4 == "Appliances"
+replace BuildingShellHH4 = 1 if rebate_category4 == "Building Shell"
+replace CustomMeasureHH4 = 1 if rebate_category4 == "Customized Measure"
+replace HVACHH4 = 1 if rebate_category4 == "HVAC"
+replace IntegratedBuildingHH4 = 1 if rebate_category4 == "Integrated Buildin"
+replace LightingHH4 = 1 if rebate_category4 == "Lighting"
+replace PumpsMotorsHH4 = 1 if rebate_category4 == "Pumps/Motors"
+replace UnknownHH4 = 1 if rebate_category4 == "Unknown"
+replace WaterHeatingHH4 = 1 if rebate_category4 == "Water Heating"
+gen ApplianceRecyclingParticipant4 = 0
+gen AppliancesParticipant4 = 0
+gen BuildingShellParticipant4 = 0
+gen CustomMeasureParticipant4 = 0
+gen HVACParticipant4 = 0
+gen IntegratedBuildingParticipant4 = 0
+gen LightingParticipant4 = 0
+gen PumpsMotorsParticipant4 = 0
+gen UnknownParticipant4 = 0
+gen WaterHeatingParticipant4 = 0
+replace ApplianceRecyclingParticipant4 = 1 if ApplianceRecyclingHH4 == 1 & edate >= rebateedate4 & rebateedate4 != .
+replace AppliancesParticipant4 = 1 if AppliancesHH4 == 1 & edate >= rebateedate4 & rebateedate4 != .
+replace BuildingShellParticipant4 = 1 if BuildingShellHH4 == 1 & edate >= rebateedate4 & rebateedate4 != .
+replace CustomMeasureParticipant4 = 1 if CustomMeasureHH4 == 1 & edate >= rebateedate4 & rebateedate4 != .
+replace HVACParticipant4 = 1 if HVACHH4 == 1 & edate >= rebateedate4 & rebateedate4 != .
+replace IntegratedBuildingParticipant4 = 1 if IntegratedBuildingHH4 == 1 & edate >= rebateedate4 & rebateedate4 != .
+replace LightingParticipant4 = 1 if LightingHH4 == 1 & edate >= rebateedate4 & rebateedate4 != .
+replace PumpsMotorsParticipant4 = 1 if PumpsMotorsHH4 == 1 & edate >= rebateedate4 & rebateedate4 != .
+replace UnknownParticipant4 = 1 if UnknownHH4 == 1 & edate >= rebateedate4 & rebateedate4 != .
+replace WaterHeatingParticipant4 = 1 if WaterHeatingHH4 == 1 & edate >= rebateedate4 & rebateedate4 != .
+gen ApplianceRecyclingHH5 = 0
+gen AppliancesHH5 = 0
+gen BuildingShellHH5 = 0
+gen CustomMeasureHH5 = 0
+gen HVACHH5 = 0
+gen IntegratedBuildingHH5 = 0
+gen LightingHH5 = 0
+gen PumpsMotorsHH5 = 0
+gen UnknownHH5 = 0
+gen WaterHeatingHH5 = 0
+replace ApplianceRecyclingHH5 = 1 if rebate_category5 == "ApplianceRecycling"
+replace AppliancesHH5 = 1 if rebate_category5 == "Appliances"
+replace BuildingShellHH5 = 1 if rebate_category5 == "Building Shell"
+replace CustomMeasureHH5 = 1 if rebate_category5 == "Customized Measure"
+replace HVACHH5 = 1 if rebate_category5 == "HVAC"
+replace IntegratedBuildingHH5 = 1 if rebate_category5 == "Integrated Buildin"
+replace LightingHH5 = 1 if rebate_category5 == "Lighting"
+replace PumpsMotorsHH5 = 1 if rebate_category5 == "Pumps/Motors"
+replace UnknownHH5 = 1 if rebate_category5 == "Unknown"
+replace WaterHeatingHH5 = 1 if rebate_category5 == "Water Heating"
+gen ApplianceRecyclingParticipant5 = 0
+gen AppliancesParticipant5 = 0
+gen BuildingShellParticipant5 = 0
+gen CustomMeasureParticipant5 = 0
+gen HVACParticipant5 = 0
+gen IntegratedBuildingParticipant5 = 0
+gen LightingParticipant5 = 0
+gen PumpsMotorsParticipant5 = 0
+gen UnknownParticipant5 = 0
+gen WaterHeatingParticipant5 = 0
+replace ApplianceRecyclingParticipant5 = 1 if ApplianceRecyclingHH5 == 1 & edate >= rebateedate5 & rebateedate5 != .
+replace AppliancesParticipant5 = 1 if AppliancesHH5 == 1 & edate >= rebateedate5 & rebateedate5 != .
+replace BuildingShellParticipant5 = 1 if BuildingShellHH5 == 1 & edate >= rebateedate5 & rebateedate5 != .
+replace CustomMeasureParticipant5 = 1 if CustomMeasureHH5 == 1 & edate >= rebateedate5 & rebateedate5 != .
+replace HVACParticipant5 = 1 if HVACHH5 == 1 & edate >= rebateedate5 & rebateedate5 != .
+replace IntegratedBuildingParticipant5 = 1 if IntegratedBuildingHH5 == 1 & edate >= rebateedate5 & rebateedate5 != .
+replace LightingParticipant5 = 1 if LightingHH5 == 1 & edate >= rebateedate5 & rebateedate5 != .
+replace PumpsMotorsParticipant5 = 1 if PumpsMotorsHH5 == 1 & edate >= rebateedate5 & rebateedate5 != .
+replace UnknownParticipant5 = 1 if UnknownHH5 == 1 & edate >= rebateedate5 & rebateedate5 != .
+replace WaterHeatingParticipant5 = 1 if WaterHeatingHH5 == 1 & edate >= rebateedate5 & rebateedate5 != .
+replace rebatecount=0 if rebatecount==.
+Compress
+save "C:\Users\Russell Meyer\Documents\PGE\131210 DailyPanel.dta", replace
+
+*creating some time-based dummies
+gen jan = 0
+gen feb = 0
+gen mar = 0
+gen apr = 0
+gen may = 0
+gen jun = 0
+gen jul = 0
+gen aug = 0
+gen sep = 0
+gen oct = 0
+gen nov = 0
+gen dec = 0
+gen mon = 0
+gen tue = 0
+gen wed = 0
+gen thu = 0
+gen fri = 0
+gen sat = 0
+gen sun = 0
+replace jan = 1 if month(edate) == 1
+replace feb = 1 if month(edate) == 2
+replace mar = 1 if month(edate) == 3
+replace apr = 1 if month(edate) == 4
+replace may = 1 if month(edate) == 5
+replace jun = 1 if month(edate) == 6
+replace jul = 1 if month(edate) == 7
+replace aug = 1 if month(edate) == 8
+replace sep = 1 if month(edate) == 9
+replace oct = 1 if month(edate) == 10
+replace nov = 1 if month(edate) == 11
+replace dec = 1 if month(edate) == 12
+replace mon = 1 if dow(edate) == 1
+replace tue = 1 if dow(edate) == 2
+replace wed = 1 if dow(edate) == 3
+replace thu = 1 if dow(edate) == 4
+replace fri = 1 if dow(edate) == 5
+replace sat = 1 if dow(edate) == 6
+replace sun = 1 if dow(edate) == 0
+compress
+save "C:\Users\Russell Meyer\Documents\PGE\131210 DailyPanel.dta", replace
+
+
+
+
+
+
+gen bppcurrent = 0
+gen carecurrent = 0
+gen climatesmartcurrent = 0
+gen diraccesscurrent = 0
+gen smartaccurrent = 0
+gen smartratecurrent = 0
+
+
+gen bpp_startdate1edate = mdy(real(substr(bpp_startdate1,6,2)),real(substr(bpp_startdate1,9,2)),real(substr(bpp_startdate1,1,4))) 
+
+if bpp_startdate1 != "NULL" | bpp_startdate1 != ""
+
+gen bpp_enddate1edate= mdy(real(substr(bpp_enddate1,6,2)),real(substr(bpp_enddate1,9,2)),real(substr(bpp_enddate1,1,4))) if 
+
+bpp_enddate1 != "NULL" | bpp_enddate1 != ""
+
+gen care_startdate1edate= mdy(real(substr(care_startdate1,6,2)),real(substr(care_startdate1,9,2)),real(substr
+
+(care_startdate1,1,4))) if care_startdate1 != "NULL" | care_startdate1 != ""
+
+gen care_enddate1edate= mdy(real(substr(care_enddate1,6,2)),real(substr(care_enddate1,9,2)),real(substr(care_enddate1,1,4))) if 
+
+care_enddate1 != "NULL" | care_enddate1 != ""
+
+gen climatesmart_startdate1edate= mdy(real(substr(climatesmart_startdate1,6,2)),real(substr(climatesmart_startdate1,9,2)),real
+
+(substr(climatesmart_startdate1,1,4))) if climatesmart_startdate1 != "NULL" | climatesmart_startdate1 != ""
+
+gen climatesmart_enddate1edate= mdy(real(substr(climatesmart_enddate1,6,2)),real(substr(climatesmart_enddate1,9,2)),real(substr
+
+(climatesmart_enddate1,1,4))) if climatesmart_enddate1 != "NULL" | climatesmart_enddate1 != ""
+
+gen diraccess_startdate1edate= mdy(real(substr(diraccess_startdate1,6,2)),real(substr(diraccess_startdate1,9,2)),real(substr
+
+(diraccess_startdate1,1,4))) if diraccess_startdate1 != "NULL" | diraccess_startdate1 != ""
+
+gen diraccess_enddate1edate= mdy(real(substr(diraccess_enddate1,6,2)),real(substr(diraccess_enddate1,9,2)),real(substr
+
+(diraccess_enddate1,1,4))) if diraccess_enddate1 != "NULL" | diraccess_enddate1 != ""
+
+gen smartac_startdate1edate= mdy(real(substr(smartac_startdate1,6,2)),real(substr(smartac_startdate1,9,2)),real(substr
+
+(smartac_startdate1,1,4))) if smartac_startdate1 != "NULL" | smartac_startdate1 != ""
+
+gen smartac_enddate1edate= mdy(real(substr(smartac_enddate1,6,2)),real(substr(smartac_enddate1,9,2)),real(substr
+
+(smartac_enddate1,1,4))) if smartac_enddate1 != "NULL" | smartac_enddate1 != ""
+
+gen smartrate_startdate1edate= mdy(real(substr(smartrate_startdate1,6,2)),real(substr(smartrate_startdate1,9,2)),real(substr
+
+(smartrate_startdate1,1,4))) if smartrate_startdate1 != "NULL" | smartrate_startdate1 != ""
+
+gen smartrate_enddate1edate= mdy(real(substr(smartrate_enddate1,6,2)),real(substr(smartrate_enddate1,9,2)),real(substr
+
+(smartrate_enddate1,1,4))) if smartrate_enddate1 != "NULL" | smartrate_enddate1 != ""
+
+
+
+gen bpp_startdate2edate = mdy(real(substr(bpp_startdate2,6,2)),real(substr(bpp_startdate2,9,2)),real(substr(bpp_startdate2,1,4))) 
+
+if bpp_startdate2 != "NULL" | bpp_startdate2 != ""
+
+gen bpp_enddate2edate= mdy(real(substr(bpp_enddate2,6,2)),real(substr(bpp_enddate2,9,2)),real(substr(bpp_enddate2,1,4))) if 
+
+bpp_enddate2 != "NULL" | bpp_enddate2 != ""
+
+gen care_startdate2edate= mdy(real(substr(care_startdate2,6,2)),real(substr(care_startdate2,9,2)),real(substr
+
+(care_startdate2,1,4))) if care_startdate2 != "NULL" | care_startdate2 != ""
+
+gen care_enddate2edate= mdy(real(substr(care_enddate2,6,2)),real(substr(care_enddate2,9,2)),real(substr(care_enddate2,1,4))) if 
+
+care_enddate2 != "NULL" | care_enddate2 != ""
+
+gen climatesmart_startdate2edate= mdy(real(substr(climatesmart_startdate2,6,2)),real(substr(climatesmart_startdate2,9,2)),real
+
+(substr(climatesmart_startdate2,1,4))) if climatesmart_startdate2 != "NULL" | climatesmart_startdate2 != ""
+
+gen climatesmart_enddate2edate= mdy(real(substr(climatesmart_enddate2,6,2)),real(substr(climatesmart_enddate2,9,2)),real(substr
+
+(climatesmart_enddate2,1,4))) if climatesmart_enddate2 != "NULL" | climatesmart_enddate2 != ""
+
+gen diraccess_startdate2edate= mdy(real(substr(diraccess_startdate2,6,2)),real(substr(diraccess_startdate2,9,2)),real(substr
+
+(diraccess_startdate2,1,4))) if diraccess_startdate2 != "NULL" | diraccess_startdate2 != ""
+
+gen diraccess_enddate2edate= mdy(real(substr(diraccess_enddate2,6,2)),real(substr(diraccess_enddate2,9,2)),real(substr
+
+(diraccess_enddate2,1,4))) if diraccess_enddate2 != "NULL" | diraccess_enddate2 != ""
+
+gen smartac_startdate2edate= mdy(real(substr(smartac_startdate2,6,2)),real(substr(smartac_startdate2,9,2)),real(substr
+
+(smartac_startdate2,1,4))) if smartac_startdate2 != "NULL" | smartac_startdate2 != ""
+
+gen smartac_enddate2edate= mdy(real(substr(smartac_enddate2,6,2)),real(substr(smartac_enddate2,9,2)),real(substr
+
+(smartac_enddate2,1,4))) if smartac_enddate2 != "NULL" | smartac_enddate2 != ""
+
+gen smartrate_startdate2edate= mdy(real(substr(smartrate_startdate2,6,2)),real(substr(smartrate_startdate2,9,2)),real(substr
+
+(smartrate_startdate2,1,4))) if smartrate_startdate2 != "NULL" | smartrate_startdate2 != ""
+
+gen smartrate_enddate2edate= mdy(real(substr(smartrate_enddate2,6,2)),real(substr(smartrate_enddate2,9,2)),real(substr
+
+(smartrate_enddate2,1,4))) if smartrate_enddate2 != "NULL" | smartrate_enddate2 != ""
+
+compress
+
+
+
+gen bpp_startdate3edate = mdy(real(substr(bpp_startdate3,6,2)),real(substr(bpp_startdate3,9,2)),real(substr(bpp_startdate3,1,4))) 
+
+if bpp_startdate3 != "NULL" | bpp_startdate3 != ""
+
+gen bpp_enddate3edate= mdy(real(substr(bpp_enddate3,6,2)),real(substr(bpp_enddate3,9,2)),real(substr(bpp_enddate3,1,4))) if 
+
+bpp_enddate3 != "NULL" | bpp_enddate3 != ""
+
+gen care_startdate3edate= mdy(real(substr(care_startdate3,6,2)),real(substr(care_startdate3,9,2)),real(substr
+
+(care_startdate3,1,4))) if care_startdate3 != "NULL" | care_startdate3 != ""
+
+gen care_enddate3edate= mdy(real(substr(care_enddate3,6,2)),real(substr(care_enddate3,9,2)),real(substr(care_enddate3,1,4))) if 
+
+care_enddate3 != "NULL" | care_enddate3 != ""
+
+gen climatesmart_startdate3edate= mdy(real(substr(climatesmart_startdate3,6,2)),real(substr(climatesmart_startdate3,9,2)),real
+
+(substr(climatesmart_startdate3,1,4))) if climatesmart_startdate3 != "NULL" | climatesmart_startdate3 != ""
+
+gen climatesmart_enddate3edate= mdy(real(substr(climatesmart_enddate3,6,2)),real(substr(climatesmart_enddate3,9,2)),real(substr
+
+(climatesmart_enddate3,1,4))) if climatesmart_enddate3 != "NULL" | climatesmart_enddate3 != ""
+
+gen diraccess_startdate3edate= mdy(real(substr(diraccess_startdate3,6,2)),real(substr(diraccess_startdate3,9,2)),real(substr
+
+(diraccess_startdate3,1,4))) if diraccess_startdate3 != "NULL" | diraccess_startdate3 != ""
+
+gen diraccess_enddate3edate= mdy(real(substr(diraccess_enddate3,6,2)),real(substr(diraccess_enddate3,9,2)),real(substr
+
+(diraccess_enddate3,1,4))) if diraccess_enddate3 != "NULL" | diraccess_enddate3 != ""
+
+gen smartac_startdate3edate= mdy(real(substr(smartac_startdate3,6,2)),real(substr(smartac_startdate3,9,2)),real(substr
+
+(smartac_startdate3,1,4))) if smartac_startdate3 != "NULL" | smartac_startdate3 != ""
+
+gen smartac_enddate3edate= mdy(real(substr(smartac_enddate3,6,2)),real(substr(smartac_enddate3,9,2)),real(substr
+
+(smartac_enddate3,1,4))) if smartac_enddate3 != "NULL" | smartac_enddate3 != ""
+
+gen smartrate_startdate3edate= mdy(real(substr(smartrate_startdate3,6,2)),real(substr(smartrate_startdate3,9,2)),real(substr
+
+(smartrate_startdate3,1,4))) if smartrate_startdate3 != "NULL" | smartrate_startdate3 != ""
+
+gen smartrate_enddate3edate= mdy(real(substr(smartrate_enddate3,6,2)),real(substr(smartrate_enddate3,9,2)),real(substr
+
+(smartrate_enddate3,1,4))) if smartrate_enddate3 != "NULL" | smartrate_enddate3 != ""
+
+compress
+
+
+gen bpp_startdate4edate = mdy(real(substr(bpp_startdate4,6,2)),real(substr(bpp_startdate4,9,2)),real(substr(bpp_startdate4,1,4))) 
+
+if bpp_startdate4 != "NULL" | bpp_startdate4 != ""
+
+gen bpp_enddate4edate= mdy(real(substr(bpp_enddate4,6,2)),real(substr(bpp_enddate4,9,2)),real(substr(bpp_enddate4,1,4))) if 
+
+bpp_enddate4 != "NULL" | bpp_enddate4 != ""
+
+gen care_startdate4edate= mdy(real(substr(care_startdate4,6,2)),real(substr(care_startdate4,9,2)),real(substr
+
+(care_startdate4,1,4))) if care_startdate4 != "NULL" | care_startdate4 != ""
+
+gen care_enddate4edate= mdy(real(substr(care_enddate4,6,2)),real(substr(care_enddate4,9,2)),real(substr(care_enddate4,1,4))) if 
+
+care_enddate4 != "NULL" | care_enddate4 != ""
+
+gen climatesmart_startdate4edate= mdy(real(substr(climatesmart_startdate4,6,2)),real(substr(climatesmart_startdate4,9,2)),real
+
+(substr(climatesmart_startdate4,1,4))) if climatesmart_startdate4 != "NULL" | climatesmart_startdate4 != ""
+
+gen climatesmart_enddate4edate= mdy(real(substr(climatesmart_enddate4,6,2)),real(substr(climatesmart_enddate4,9,2)),real(substr
+
+(climatesmart_enddate4,1,4))) if climatesmart_enddate4 != "NULL" | climatesmart_enddate4 != ""
+
+gen diraccess_startdate4edate= mdy(real(substr(diraccess_startdate4,6,2)),real(substr(diraccess_startdate4,9,2)),real(substr
+
+(diraccess_startdate4,1,4))) if diraccess_startdate4 != "NULL" | diraccess_startdate4 != ""
+
+gen diraccess_enddate4edate= mdy(real(substr(diraccess_enddate4,6,2)),real(substr(diraccess_enddate4,9,2)),real(substr
+
+(diraccess_enddate4,1,4))) if diraccess_enddate4 != "NULL" | diraccess_enddate4 != ""
+
+gen smartac_startdate4edate= mdy(real(substr(smartac_startdate4,6,2)),real(substr(smartac_startdate4,9,2)),real(substr
+
+(smartac_startdate4,1,4))) if smartac_startdate4 != "NULL" | smartac_startdate4 != ""
+
+gen smartac_enddate4edate= mdy(real(substr(smartac_enddate4,6,2)),real(substr(smartac_enddate4,9,2)),real(substr
+
+(smartac_enddate4,1,4))) if smartac_enddate4 != "NULL" | smartac_enddate4 != ""
+
+gen smartrate_startdate4edate= mdy(real(substr(smartrate_startdate4,6,2)),real(substr(smartrate_startdate4,9,2)),real(substr
+
+(smartrate_startdate4,1,4))) if smartrate_startdate4 != "NULL" | smartrate_startdate4 != ""
+
+gen smartrate_enddate4edate= mdy(real(substr(smartrate_enddate4,6,2)),real(substr(smartrate_enddate4,9,2)),real(substr
+
+(smartrate_enddate4,1,4))) if smartrate_enddate4 != "NULL" | smartrate_enddate4 != ""
+
+compress
+
+
+
+gen bpp_startdate5edate = mdy(real(substr(bpp_startdate5,6,2)),real(substr(bpp_startdate5,9,2)),real(substr(bpp_startdate5,1,4))) 
+
+if bpp_startdate5 != "NULL" | bpp_startdate5 != ""
+
+gen bpp_enddate5edate= mdy(real(substr(bpp_enddate5,6,2)),real(substr(bpp_enddate5,9,2)),real(substr(bpp_enddate5,1,4))) if 
+
+bpp_enddate5 != "NULL" | bpp_enddate5 != ""
+
+gen care_startdate5edate= mdy(real(substr(care_startdate5,6,2)),real(substr(care_startdate5,9,2)),real(substr
+
+(care_startdate5,1,4))) if care_startdate5 != "NULL" | care_startdate5 != ""
+
+gen care_enddate5edate= mdy(real(substr(care_enddate5,6,2)),real(substr(care_enddate5,9,2)),real(substr(care_enddate5,1,4))) if 
+
+care_enddate5 != "NULL" | care_enddate5 != ""
+
+gen climatesmart_startdate5edate= mdy(real(substr(climatesmart_startdate5,6,2)),real(substr(climatesmart_startdate5,9,2)),real
+
+(substr(climatesmart_startdate5,1,4))) if climatesmart_startdate5 != "NULL" | climatesmart_startdate5 != ""
+
+gen climatesmart_enddate5edate= mdy(real(substr(climatesmart_enddate5,6,2)),real(substr(climatesmart_enddate5,9,2)),real(substr
+
+(climatesmart_enddate5,1,4))) if climatesmart_enddate5 != "NULL" | climatesmart_enddate5 != ""
+
+gen diraccess_startdate5edate= mdy(real(substr(diraccess_startdate5,6,2)),real(substr(diraccess_startdate5,9,2)),real(substr
+
+(diraccess_startdate5,1,4))) if diraccess_startdate5 != "NULL" | diraccess_startdate5 != ""
+
+gen diraccess_enddate5edate= mdy(real(substr(diraccess_enddate5,6,2)),real(substr(diraccess_enddate5,9,2)),real(substr
+
+(diraccess_enddate5,1,4))) if diraccess_enddate5 != "NULL" | diraccess_enddate5 != ""
+
+gen smartac_startdate5edate= mdy(real(substr(smartac_startdate5,6,2)),real(substr(smartac_startdate5,9,2)),real(substr
+
+(smartac_startdate5,1,4))) if smartac_startdate5 != "NULL" | smartac_startdate5 != ""
+
+gen smartac_enddate5edate= mdy(real(substr(smartac_enddate5,6,2)),real(substr(smartac_enddate5,9,2)),real(substr
+
+(smartac_enddate5,1,4))) if smartac_enddate5 != "NULL" | smartac_enddate5 != ""
+
+gen smartrate_startdate5edate= mdy(real(substr(smartrate_startdate5,6,2)),real(substr(smartrate_startdate5,9,2)),real(substr
+
+(smartrate_startdate5,1,4))) if smartrate_startdate5 != "NULL" | smartrate_startdate5 != ""
+
+gen smartrate_enddate5edate= mdy(real(substr(smartrate_enddate5,6,2)),real(substr(smartrate_enddate5,9,2)),real(substr
+
+(smartrate_enddate5,1,4))) if smartrate_enddate5 != "NULL" | smartrate_enddate5 != ""
+
+compress
+
+
+
+gen bpp_startdate6edate = mdy(real(substr(bpp_startdate6,6,2)),real(substr(bpp_startdate6,9,2)),real(substr(bpp_startdate6,1,4))) 
+
+if bpp_startdate6 != "NULL" | bpp_startdate6 != ""
+
+gen bpp_enddate6edate= mdy(real(substr(bpp_enddate6,6,2)),real(substr(bpp_enddate6,9,2)),real(substr(bpp_enddate6,1,4))) if 
+
+bpp_enddate6 != "NULL" | bpp_enddate6 != ""
+
+gen care_startdate6edate= mdy(real(substr(care_startdate6,6,2)),real(substr(care_startdate6,9,2)),real(substr
+
+(care_startdate6,1,4))) if care_startdate6 != "NULL" | care_startdate6 != ""
+
+gen care_enddate6edate= mdy(real(substr(care_enddate6,6,2)),real(substr(care_enddate6,9,2)),real(substr(care_enddate6,1,4))) if 
+
+care_enddate6 != "NULL" | care_enddate6 != ""
+
+gen climatesmart_startdate6edate= mdy(real(substr(climatesmart_startdate6,6,2)),real(substr(climatesmart_startdate6,9,2)),real
+
+(substr(climatesmart_startdate6,1,4))) if climatesmart_startdate6 != "NULL" | climatesmart_startdate6 != ""
+
+gen climatesmart_enddate6edate= mdy(real(substr(climatesmart_enddate6,6,2)),real(substr(climatesmart_enddate6,9,2)),real(substr
+
+(climatesmart_enddate6,1,4))) if climatesmart_enddate6 != "NULL" | climatesmart_enddate6 != ""
+
+gen diraccess_startdate6edate= mdy(real(substr(diraccess_startdate6,6,2)),real(substr(diraccess_startdate6,9,2)),real(substr
+
+(diraccess_startdate6,1,4))) if diraccess_startdate6 != "NULL" | diraccess_startdate6 != ""
+
+gen diraccess_enddate6edate= mdy(real(substr(diraccess_enddate6,6,2)),real(substr(diraccess_enddate6,9,2)),real(substr
+
+(diraccess_enddate6,1,4))) if diraccess_enddate6 != "NULL" | diraccess_enddate6 != ""
+
+gen smartac_startdate6edate= mdy(real(substr(smartac_startdate6,6,2)),real(substr(smartac_startdate6,9,2)),real(substr
+
+(smartac_startdate6,1,4))) if smartac_startdate6 != "NULL" | smartac_startdate6 != ""
+
+gen smartac_enddate6edate= mdy(real(substr(smartac_enddate6,6,2)),real(substr(smartac_enddate6,9,2)),real(substr
+
+(smartac_enddate6,1,4))) if smartac_enddate6 != "NULL" | smartac_enddate6 != ""
+
+gen smartrate_startdate6edate= mdy(real(substr(smartrate_startdate6,6,2)),real(substr(smartrate_startdate6,9,2)),real(substr
+
+(smartrate_startdate6,1,4))) if smartrate_startdate6 != "NULL" | smartrate_startdate6 != ""
+
+gen smartrate_enddate6edate= mdy(real(substr(smartrate_enddate6,6,2)),real(substr(smartrate_enddate6,9,2)),real(substr
+
+(smartrate_enddate6,1,4))) if smartrate_enddate6 != "NULL" | smartrate_enddate6 != ""
+
+compress
+
+
+
+gen bpp_startdate7edate = mdy(real(substr(bpp_startdate7,6,2)),real(substr(bpp_startdate7,9,2)),real(substr(bpp_startdate7,1,4))) 
+
+if bpp_startdate7 != "NULL" | bpp_startdate7 != ""
+
+gen bpp_enddate7edate= mdy(real(substr(bpp_enddate7,6,2)),real(substr(bpp_enddate7,9,2)),real(substr(bpp_enddate7,1,4))) if 
+
+bpp_enddate7 != "NULL" | bpp_enddate7 != ""
+
+gen care_startdate7edate= mdy(real(substr(care_startdate7,6,2)),real(substr(care_startdate7,9,2)),real(substr
+
+(care_startdate7,1,4))) if care_startdate7 != "NULL" | care_startdate7 != ""
+
+gen care_enddate7edate= mdy(real(substr(care_enddate7,6,2)),real(substr(care_enddate7,9,2)),real(substr(care_enddate7,1,4))) if 
+
+care_enddate7 != "NULL" | care_enddate7 != ""
+
+gen climatesmart_startdate7edate= mdy(real(substr(climatesmart_startdate7,6,2)),real(substr(climatesmart_startdate7,9,2)),real
+
+(substr(climatesmart_startdate7,1,4))) if climatesmart_startdate7 != "NULL" | climatesmart_startdate7 != ""
+
+gen climatesmart_enddate7edate= mdy(real(substr(climatesmart_enddate7,6,2)),real(substr(climatesmart_enddate7,9,2)),real(substr
+
+(climatesmart_enddate7,1,4))) if climatesmart_enddate7 != "NULL" | climatesmart_enddate7 != ""
+
+gen diraccess_startdate7edate= mdy(real(substr(diraccess_startdate7,6,2)),real(substr(diraccess_startdate7,9,2)),real(substr
+
+(diraccess_startdate7,1,4))) if diraccess_startdate7 != "NULL" | diraccess_startdate7 != ""
+
+gen diraccess_enddate7edate= mdy(real(substr(diraccess_enddate7,6,2)),real(substr(diraccess_enddate7,9,2)),real(substr
+
+(diraccess_enddate7,1,4))) if diraccess_enddate7 != "NULL" | diraccess_enddate7 != ""
+
+gen smartac_startdate7edate= mdy(real(substr(smartac_startdate7,6,2)),real(substr(smartac_startdate7,9,2)),real(substr
+
+(smartac_startdate7,1,4))) if smartac_startdate7 != "NULL" | smartac_startdate7 != ""
+
+gen smartac_enddate7edate= mdy(real(substr(smartac_enddate7,6,2)),real(substr(smartac_enddate7,9,2)),real(substr
+
+(smartac_enddate7,1,4))) if smartac_enddate7 != "NULL" | smartac_enddate7 != ""
+
+gen smartrate_startdate7edate= mdy(real(substr(smartrate_startdate7,6,2)),real(substr(smartrate_startdate7,9,2)),real(substr
+
+(smartrate_startdate7,1,4))) if smartrate_startdate7 != "NULL" | smartrate_startdate7 != ""
+
+gen smartrate_enddate7edate= mdy(real(substr(smartrate_enddate7,6,2)),real(substr(smartrate_enddate7,9,2)),real(substr
+
+(smartrate_enddate7,1,4))) if smartrate_enddate7 != "NULL" | smartrate_enddate7 != ""
+
+compress
+
+
+
+
+replace bppcurrent = 1 if (edate >= bpp_startdate1edate & edate < bpp_enddate1edate) | (edate >= bpp_startdate2edate & edate < 
+
+bpp_enddate2edate) | (edate >= bpp_startdate3edate & edate < bpp_enddate3edate) | (edate >= bpp_startdate4edate & edate < 
+
+bpp_enddate4edate) | (edate >= bpp_startdate5edate & edate < bpp_enddate5edate) | (edate >= bpp_startdate6edate & edate < 
+
+bpp_enddate6edate) | (edate >= bpp_startdate7edate & edate < bpp_enddate7edate)
+
+replace carecurrent = 1 if (edate >= care_startdate1edate & edate < care_enddate1edate) | (edate >= care_startdate2edate & edate 
+
+< care_enddate2edate) | (edate >= care_startdate3edate & edate < care_enddate3edate) | (edate >= care_startdate4edate & edate < 
+
+care_enddate4edate) | (edate >= care_startdate5edate & edate < care_enddate5edate) | (edate >= care_startdate6edate & edate < 
+
+care_enddate6edate) | (edate >= care_startdate7edate & edate < care_enddate7edate)
+
+replace climatesmartcurrent = 1 if (edate >= climatesmart_startdate1edate & edate < climatesmart_enddate1edate) | (edate >= 
+
+climatesmart_startdate2edate & edate < climatesmart_enddate2edate) | (edate >= climatesmart_startdate3edate & edate < 
+
+climatesmart_enddate3edate) | (edate >= climatesmart_startdate4edate & edate < climatesmart_enddate4edate) | (edate >= 
+
+climatesmart_startdate5edate & edate < climatesmart_enddate5edate) | (edate >= climatesmart_startdate6edate & edate < 
+
+climatesmart_enddate6edate) | (edate >= climatesmart_startdate7edate & edate < climatesmart_enddate7edate)
+
+replace diraccesscurrent = 1 if (edate >= diraccess_startdate1edate & edate < diraccess_enddate1edate) | (edate >= 
+
+diraccess_startdate2edate & edate < diraccess_enddate2edate) | (edate >= diraccess_startdate3edate & edate < 
+
+diraccess_enddate3edate) | (edate >= diraccess_startdate4edate & edate < diraccess_enddate4edate) | (edate >= 
+
+diraccess_startdate5edate & edate < diraccess_enddate5edate) | (edate >= diraccess_startdate6edate & edate < 
+
+diraccess_enddate6edate) | (edate >= diraccess_startdate7edate & edate < diraccess_enddate7edate)
+
+replace smartaccurrent = 1 if (edate >= smartac_startdate1edate & edate < smartac_enddate1edate) | (edate >= 
+
+smartac_startdate2edate & edate < smartac_enddate2edate) | (edate >= smartac_startdate3edate & edate < smartac_enddate3edate) | 
+
+(edate >= smartac_startdate4edate & edate < smartac_enddate4edate) | (edate >= smartac_startdate5edate & edate < 
+
+smartac_enddate5edate) | (edate >= smartac_startdate6edate & edate < smartac_enddate6edate) | (edate >= smartac_startdate7edate & 
+
+edate < smartac_enddate7edate)
+
+replace smartratecurrent = 1 if (edate >= smartrate_startdate1edate & edate < smartrate_enddate1edate) | (edate >= 
+
+smartrate_startdate2edate & edate < smartrate_enddate2edate) | (edate >= smartrate_startdate3edate & edate < 
+
+smartrate_enddate3edate) | (edate >= smartrate_startdate4edate & edate < smartrate_enddate4edate) | (edate >= 
+
+smartrate_startdate5edate & edate < smartrate_enddate5edate) | (edate >= smartrate_startdate6edate & edate < 
+
+smartrate_enddate6edate) | (edate >= smartrate_startdate7edate & edate < smartrate_enddate7edate)
+
+
+
+
+
